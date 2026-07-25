@@ -12,3 +12,13 @@ dist/
 
 # sheesh, nice env you got here
 .env
+.env.*
+!.env.example
+!mcp_server/.env.example
+
+# never commit local captures or credentials
+*.har
+captures/
+*.pem
+*.key
+credentials*.json
