@@ -1,0 +1,64 @@
+services:
+  egress-guard:
+    build:
+      context: ./egress-guard
+    image: fast-flights-egress-guard:local
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 32m
+    cpus: 0.1
+    pids_limit: 32
+    ports:
+      - "127.0.0.1:18000:8000"
+    tmpfs:
+      - /run:rw,noexec,nosuid,nodev,size=1m
+      - /tmp:rw,noexec,nosuid,nodev,size=1m
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/egress-guard.ready"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    logging:
+      driver: none
+
+  fast-flights-mcp:
+    build:
+      context: ..
+      dockerfile: mcp_server/Dockerfile
+    image: fast-flights-mcp:local
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    environment:
+      OIDC_ISSUER: ${OIDC_ISSUER:?set OIDC_ISSUER in mcp_server/.env}
+      OAUTH_RESOURCE: ${OAUTH_RESOURCE:?set OAUTH_RESOURCE in mcp_server/.env}
+      OAUTH_RESOURCE_ALIASES: ${OAUTH_RESOURCE_ALIASES:-}
+      OAUTH_SCOPE: ${OAUTH_SCOPE:-flights.read}
+      MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-65536}
+      SEARCHES_PER_MINUTE: ${SEARCHES_PER_MINUTE:-20}
+      MAX_CONCURRENT_SEARCHES: ${MAX_CONCURRENT_SEARCHES:-4}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    network_mode: service:egress-guard
+    depends_on:
+      egress-guard:
+        condition: service_healthy
