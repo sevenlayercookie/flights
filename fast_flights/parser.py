@@ -61,8 +61,16 @@ def parse_js(js: str):
         return flights
 
     for k in payload[3][0]:
+        price_groups = k[1] if len(k) > 1 else None
+        price_data = price_groups[0] if price_groups else None
+        if not price_data or len(price_data) < 2 or price_data[1] is None:
+            # Google may return otherwise valid itinerary rows without a
+            # price, particularly when no fare satisfies a price filter.
+            # Such rows are not actionable search results.
+            continue
+
         flight = k[0]
-        price = k[1][0][1]
+        price = price_data[1]
 
         typ = flight[0]
         airlines = flight[1]
