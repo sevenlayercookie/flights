@@ -3,6 +3,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fast_flights import FlightsResponseError
+from primp import ConnectError
+
 from mcp_server import server
 
 
@@ -132,6 +135,32 @@ class ServerTests(unittest.TestCase):
                 departure_date="2099-12-06",
                 return_earliest_departure_hour=8,
             )
+
+    def test_upstream_response_and_network_errors_are_structured(self) -> None:
+        cases = (
+            (
+                FlightsResponseError("payload changed"),
+                "upstream_response",
+            ),
+            (
+                ConnectError("connection failed"),
+                "upstream_unavailable",
+            ),
+        )
+        for exception, error_type in cases:
+            with (
+                self.subTest(error_type=error_type),
+                patch.object(server, "get_flights", side_effect=exception),
+            ):
+                result = server.search_flights(
+                    origin="MSP",
+                    destination="DEN",
+                    departure_date="2099-12-06",
+                )
+
+                self.assertEqual(result["results"], [])
+                self.assertEqual(result["error"]["type"], error_type)
+                self.assertIn("retry", result["message"])
 
     def test_rate_limiter_enforces_window(self) -> None:
         async def check() -> None:

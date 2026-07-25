@@ -11,10 +11,18 @@ from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 import jwt
-from fast_flights import FlightQuery, Passengers, create_query, get_flights
-from fast_flights.exceptions import FlightsNotFound
+from fast_flights import (
+    FlightQuery,
+    FlightsNotFound,
+    FlightsResponseError,
+    Passengers,
+    create_query,
+    get_flights,
+)
 from jwt import PyJWKClient
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from primp import PrimpError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -248,13 +256,13 @@ def _result_metadata(results: Any) -> dict[str, list[dict[str, str]]]:
 
 
 @mcp.tool(
-    annotations={
-        "title": "Search live flight prices",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": False,
-        "openWorldHint": True,
-    },
+    annotations=ToolAnnotations(
+        title="Search live flight prices",
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
     meta={
         "securitySchemes": [
             {"type": "oauth2", "scopes": [OAUTH_SCOPE]},
@@ -549,6 +557,29 @@ def search_flights(
             "results": [],
             "metadata": {"airlines": [], "alliances": []},
             "message": str(exc),
+            "baggage_note": _baggage_note(carry_on_count, checked_count),
+            "google_flights_url": query.url(),
+        }
+    except FlightsResponseError as exc:
+        return {
+            "query": query_payload,
+            "results": [],
+            "metadata": {"airlines": [], "alliances": []},
+            "message": (
+                "Google Flights returned an unsupported response; retry the "
+                "search later."
+            ),
+            "error": {"type": "upstream_response", "detail": str(exc)},
+            "baggage_note": _baggage_note(carry_on_count, checked_count),
+            "google_flights_url": query.url(),
+        }
+    except PrimpError:
+        return {
+            "query": query_payload,
+            "results": [],
+            "metadata": {"airlines": [], "alliances": []},
+            "message": "Google Flights could not be reached; retry the search later.",
+            "error": {"type": "upstream_unavailable"},
             "baggage_note": _baggage_note(carry_on_count, checked_count),
             "google_flights_url": query.url(),
         }
