@@ -5,7 +5,7 @@ Docs: https://flights.aweird.me/
 """
 
 from . import integrations
-from .exceptions import FlightsNotFound
+from .exceptions import FlightsNotFound, FlightsResponseError
 from .fetcher import fetch_flights_html, get_flights
 from .parser import ResultList
 from .querying import (
@@ -28,5 +28,6 @@ __all__ = [
     "fetch_flights_html",
     "integrations",
     "FlightsNotFound",
+    "FlightsResponseError",
     "ResultList",
 ]

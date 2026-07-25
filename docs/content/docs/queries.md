@@ -79,7 +79,13 @@ query = create_query(
 ```
 
 `max_price` uses the currency selected by `currency`. Baggage counts ask Google
-to include its estimated bag fees in displayed prices.
+to include its estimated bag fees in displayed prices. Hours must be between
+0 and 23; numeric filters and passenger counts cannot be negative; and minimum
+values cannot exceed their corresponding maximum values. Invalid query values
+raise `TypeError` or `ValueError` before a request is sent.
+
+A valid search with no matching fares returns an empty `ResultList`. An
+unsupported or malformed Google response raises `FlightsResponseError`.
 
 ## Trip
 Either one of:

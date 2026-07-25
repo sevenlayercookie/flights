@@ -1,6 +1,7 @@
 import typing
 from base64 import b64encode
 from dataclasses import dataclass
+from datetime import date as Date
 from datetime import datetime as Datetime
 from typing import Literal
 
@@ -17,6 +18,37 @@ from .pb.flights_pb2 import (
     Trip,
 )
 from .types import Currency, Language, SeatType, TripType
+
+PROTOBUF_INT32_MAX = 2_147_483_647
+
+
+def _nonnegative_int(value: int | None, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer")
+    if not 0 <= value <= PROTOBUF_INT32_MAX:
+        raise ValueError(
+            f"{name} must be between 0 and {PROTOBUF_INT32_MAX}, inclusive"
+        )
+    return value
+
+
+def _hour(value: int | None, name: str) -> int | None:
+    value = _nonnegative_int(value, name)
+    if value is not None and value > 23:
+        raise ValueError(f"{name} must be between 0 and 23, inclusive")
+    return value
+
+
+def _ordered_range(
+    minimum: int | None,
+    maximum: int | None,
+    minimum_name: str,
+    maximum_name: str,
+) -> None:
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError(f"{minimum_name} must not exceed {maximum_name}")
 
 
 @dataclass
@@ -37,6 +69,19 @@ class Query:
     checked_bags: int = 0
     hide_separate_and_self_transfer: bool = False
     exclude_basic_economy: bool = False
+
+    def __post_init__(self) -> None:
+        self.max_price = _nonnegative_int(self.max_price, "max_price")
+        carry_on_bags = _nonnegative_int(self.carry_on_bags, "carry_on_bags")
+        checked_bags = _nonnegative_int(self.checked_bags, "checked_bags")
+        if carry_on_bags is None or checked_bags is None:
+            raise TypeError("bag counts must be integers")
+        self.carry_on_bags = carry_on_bags
+        self.checked_bags = checked_bags
+        if not isinstance(self.hide_separate_and_self_transfer, bool):
+            raise TypeError("hide_separate_and_self_transfer must be a boolean")
+        if not isinstance(self.exclude_basic_economy, bool):
+            raise TypeError("exclude_basic_economy must be a boolean")
 
     def pb(self) -> Info:
         """(internal) Protobuf data. (`Info`)"""
@@ -123,6 +168,90 @@ class FlightQuery:
     max_layover_minutes: int | None = None
     less_emissions_only: bool = False
 
+    def __post_init__(self) -> None:
+        if isinstance(self.date, str):
+            try:
+                Date.fromisoformat(self.date)
+            except ValueError as exc:
+                raise ValueError("date must use YYYY-MM-DD format") from exc
+        elif not isinstance(self.date, Datetime):
+            raise TypeError("date must be a YYYY-MM-DD string or datetime")
+        for name, airport in (
+            ("from_airport", self.from_airport),
+            ("to_airport", self.to_airport),
+        ):
+            if not isinstance(airport, str) or not airport.strip():
+                raise ValueError(f"{name} must be a nonempty string")
+        if self.from_airport == self.to_airport:
+            raise ValueError("from_airport and to_airport must be different")
+        if self.airlines is not None and (
+            not isinstance(self.airlines, list)
+            or any(
+                not isinstance(airline, str) or not airline.strip()
+                for airline in self.airlines
+            )
+        ):
+            raise ValueError("airlines must be a list of nonempty strings")
+        self.max_stops = _nonnegative_int(self.max_stops, "max_stops")
+        self.earliest_departure_hour = _hour(
+            self.earliest_departure_hour,
+            "earliest_departure_hour",
+        )
+        self.latest_departure_hour = _hour(
+            self.latest_departure_hour,
+            "latest_departure_hour",
+        )
+        self.earliest_arrival_hour = _hour(
+            self.earliest_arrival_hour,
+            "earliest_arrival_hour",
+        )
+        self.latest_arrival_hour = _hour(
+            self.latest_arrival_hour,
+            "latest_arrival_hour",
+        )
+        self.max_duration_minutes = _nonnegative_int(
+            self.max_duration_minutes,
+            "max_duration_minutes",
+        )
+        self.min_layover_minutes = _nonnegative_int(
+            self.min_layover_minutes,
+            "min_layover_minutes",
+        )
+        self.max_layover_minutes = _nonnegative_int(
+            self.max_layover_minutes,
+            "max_layover_minutes",
+        )
+        _ordered_range(
+            self.earliest_departure_hour,
+            self.latest_departure_hour,
+            "earliest_departure_hour",
+            "latest_departure_hour",
+        )
+        _ordered_range(
+            self.earliest_arrival_hour,
+            self.latest_arrival_hour,
+            "earliest_arrival_hour",
+            "latest_arrival_hour",
+        )
+        _ordered_range(
+            self.min_layover_minutes,
+            self.max_layover_minutes,
+            "min_layover_minutes",
+            "max_layover_minutes",
+        )
+        if self.connecting_airports is not None and (
+            not isinstance(self.connecting_airports, list)
+            or any(
+                not isinstance(airport, str) or not airport.strip()
+                for airport in self.connecting_airports
+            )
+        ):
+            raise ValueError(
+                "connecting_airports must be a list of nonempty strings"
+            )
+        if not isinstance(self.less_emissions_only, bool):
+            raise TypeError("less_emissions_only must be a boolean")
+
     def pb(self) -> FlightData:
         if isinstance(self.date, str):
             date = self.date
@@ -148,7 +277,7 @@ class FlightQuery:
 
     def with_max_stops(self, m: int | None = None) -> "FlightQuery":
         if m is not None:
-            self.max_stops = m
+            self.max_stops = _nonnegative_int(m, "max_stops")
 
         return self
 
@@ -160,14 +289,24 @@ class Passengers:
     infants_in_seat: int = 0
     infants_on_lap: int = 0
 
-    def __post_init__(self):
-        assert (
-            sum((self.adults, self.children, self.infants_in_seat, self.infants_on_lap))
-            <= 9
-        ), "Too many passengers (> 9)"
-        assert self.infants_on_lap <= self.adults, (
-            "Must have at least one adult per infant on lap"
-        )
+    def __post_init__(self) -> None:
+        counts = {
+            "adults": self.adults,
+            "children": self.children,
+            "infants_in_seat": self.infants_in_seat,
+            "infants_on_lap": self.infants_on_lap,
+        }
+        for name, count in counts.items():
+            if isinstance(count, bool) or not isinstance(count, int):
+                raise TypeError(f"{name} must be an integer")
+            if count < 0:
+                raise ValueError(f"{name} cannot be negative")
+        if sum(counts.values()) > 9:
+            raise ValueError("too many passengers (> 9)")
+        if self.adults < 1:
+            raise ValueError("at least one adult is required")
+        if self.infants_on_lap > self.adults:
+            raise ValueError("must have at least one adult per infant on lap")
 
     def pb(self) -> list[Passenger]:
         return [
@@ -231,6 +370,23 @@ def create_query(
             itineraries.
         exclude_basic_economy: Exclude basic economy fares.
     """
+    if not isinstance(flights, list) or not all(
+        isinstance(flight, FlightQuery) for flight in flights
+    ):
+        raise TypeError("flights must be a list of FlightQuery objects")
+    if not flights:
+        raise ValueError("flights must contain at least one flight query")
+    if not isinstance(seat, str) or seat not in SEAT_LOOKUP:
+        raise ValueError(f"unsupported seat type: {seat}")
+    if not isinstance(trip, str) or trip not in TRIP_LOOKUP:
+        raise ValueError(f"unsupported trip type: {trip}")
+    if passengers is not None and not isinstance(passengers, Passengers):
+        raise TypeError("passengers must be a Passengers object")
+    if not isinstance(language, str):
+        raise TypeError("language must be a string")
+    if not isinstance(currency, str):
+        raise TypeError("currency must be a string")
+
     return Query(
         flight_data=[flight.with_max_stops(max_stops).pb() for flight in flights],
         seat=SEAT_LOOKUP[seat],

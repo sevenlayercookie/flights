@@ -96,7 +96,13 @@ query = create_query(
 
 Hours use local airport time on a 0–23 clock. Duration and layover values use
 minutes, and `max_price` uses the selected `currency`. Google currently applies
-the first leg's airline filter to the whole search.
+the first leg's airline filter to the whole search. Invalid ranges, negative
+values, malformed dates, and invalid passenger counts raise `TypeError` or
+`ValueError` before a request is sent.
+
+Valid searches with no matching fares return an empty `ResultList`. If Google
+returns an unsupported or malformed response instead, fast-flights raises
+`FlightsResponseError` rather than exposing an internal indexing or type error.
 
 ## Integrations
 If you'd like, you can use integrations.

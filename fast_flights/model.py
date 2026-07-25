@@ -42,15 +42,15 @@ class SingleFlight:
     duration: int
     """Unit: minutes"""
 
-    plane_type: str
+    plane_type: str | None
 
 
 @dataclass
 class CarbonEmission:
-    typical_on_route: int
+    typical_on_route: int | None
     """Unit: grams"""
 
-    emission: int
+    emission: int | None
     """Unit: grams"""
 
 
