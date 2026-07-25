@@ -104,6 +104,13 @@ Valid searches with no matching fares return an empty `ResultList`. If Google
 returns an unsupported or malformed response instead, fast-flights raises
 `FlightsResponseError` rather than exposing an internal indexing or type error.
 
+## MCP server
+
+This downstream branch also includes a read-only, OAuth-protected MCP server
+and hardened container example. See the
+[`mcp_server` documentation](mcp_server/README.md) for its supported filters,
+configuration, security model, and local deployment instructions.
+
 ## Integrations
 If you'd like, you can use integrations.
 
