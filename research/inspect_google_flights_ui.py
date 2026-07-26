@@ -86,6 +86,7 @@ def inspect(
     text_clicks: list[str],
     range_values: list[str],
     add_origin: str | None,
+    add_destination: str | None,
 ) -> dict[str, object]:
     captured: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -147,6 +148,21 @@ def inspect(
             page.wait_for_timeout(1_000)
             page.get_by_role("button", name="Done", exact=True).last.click()
             page.wait_for_timeout(3_000)
+        if add_destination:
+            page.locator('input[aria-label^="Where to?"]').first.click()
+            page.get_by_role(
+                "button", name="Destination, Select multiple airports", exact=True
+            ).click()
+            extra = page.locator(
+                '[role="dialog"] input[role="combobox"]:visible'
+            ).last
+            extra.fill(add_destination)
+            page.wait_for_timeout(1_500)
+            extra.press("ArrowDown")
+            extra.press("Enter")
+            page.wait_for_timeout(1_000)
+            page.get_by_role("button", name="Done", exact=True).last.click()
+            page.wait_for_timeout(3_000)
         capture(page.url, "page")
         result = {
             "title": page.title(),
@@ -188,6 +204,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--add-origin",
         help="Add an airport code through the UI's origin multi-select mode.",
     )
+    parser.add_argument(
+        "--add-destination",
+        help="Add an airport code through the UI's destination multi-select mode.",
+    )
     args = parser.parse_args(argv)
 
     print(
@@ -201,6 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.click_text,
                 args.set_range,
                 args.add_origin,
+                args.add_destination,
             ),
             indent=2,
             sort_keys=True,

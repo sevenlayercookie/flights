@@ -34,8 +34,8 @@ message AirportLocation {
 - A multi-origin MSP + ORD search repeats `FlightData` field 13 twice. Thus the
   production schema's singular `from_airport` declaration is sufficient for its
   present API, but does not model the web UI's multi-airport wire format.
-  Multi-destination searches are expected to repeat field 14 in the same way,
-  but that symmetric case has not yet been independently captured.
+- A multi-destination DEN + SLC search independently confirmed the symmetric
+  representation: it repeats `FlightData` field 14.
 
 ### Sort is a second protobuf
 
